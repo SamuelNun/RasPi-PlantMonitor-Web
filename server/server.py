@@ -30,7 +30,11 @@ def receive_data():
     if not data:
         return jsonify(error="expected JSON"), 400
  
-    now = datetime.now().strftime("%H:%M:%S")
+    # Use the time the reading was taken if the node sent one;
+    # otherwise fall back to the time it arrived.
+    ts = data.get("ts")
+    taken_at = datetime.fromtimestamp(ts) if ts else datetime.now()
+    now = taken_at.strftime("%H:%M:%S")
     device = data.get("device", request.remote_addr)
  
     if "soil_raw" in data:
