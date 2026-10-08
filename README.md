@@ -8,7 +8,7 @@ This is a Python rewrite of an earlier Java Swing version that ran on a Raspberr
 
 ## How it works
 
-<img width="1250" height="511" alt="plantmonitordiagram" src="https://github.com/user-attachments/assets/c3997e5f-b9ba-43ac-9fb0-f1249e392fd9" />
+<img width="1288" height="563" alt="plantmonitordiagram2" src="https://github.com/user-attachments/assets/33d2d386-1c0d-4f74-84de-f2e863985c3d" />
 
 Each node includes its name in every message, so the server can tell them apart:
 
