@@ -1,13 +1,14 @@
 # Plant Monitor
 
-A plant monitoring system built from ESP32 sensor nodes and a Raspberry Pi server. One ESP32 measures the room's temperature, humidity and pressure, another measures soil moisture at the plant, and both send their readings over Wi-Fi to the Pi.
+A plant monitoring system built from ESP32 sensor nodes and a Raspberry Pi server. One ESP32 measures the room's temperature, humidity and pressure, another measures soil moisture at the plant, and both send their readings over Wi-Fi to the Pi. The Pi stores the readings in a PostgreSQL database and shows them on a Grafana dashboard, all running in Docker.
 
 This is a Python rewrite of an earlier Java Swing version that ran on a Raspberry Pi touchscreen.
+
+<img width="1863" height="881" alt="plantmonitordashboard" src="https://github.com/user-attachments/assets/0bd5dd55-8d54-4b8d-9885-2017f58d324a" />
 
 ## How it works
 
 <img width="1250" height="511" alt="plantmonitordiagram" src="https://github.com/user-attachments/assets/c3997e5f-b9ba-43ac-9fb0-f1249e392fd9" />
-
 
 Each node includes its name in every message, so the server can tell them apart:
 
@@ -18,7 +19,13 @@ Each node includes its name in every message, so the server can tell them apart:
 
 Readings are taken exactly on the clock, every 5 minutes (`12:00:00`, `12:05:00`, ...). Each ESP32 sets its clock over the internet with NTP and puts the time of the reading in `ts`, so readings from different nodes line up on the same timestamps for graphing. The constant variable `SEND_INTERVAL_S` changes the intervals.
 
-The Pi runs a Flask server that receives each reading at `/data` and prints it to the terminal. Soil readings are converted from the raw sensor value to a moisture percentage. If the BME280 isn't detected, its fields are sent as `null`.
+The Pi runs three Docker containers:
+
+- **server:** a Flask app that receives each reading at `/data`, prints it to its log and saves it to the database. Soil readings are converted from the raw sensor value to a moisture percentage. If the BME280 isn't detected, its fields are sent as `null`.
+- **database:** a PostgreSQL database that stores every reading.
+- **grafana:** a dashboard that reads from the database and shows current values and history graphs.
+
+The server's log looks like this:
 
 ```
 [14:05:00] env-node       Temp: 72.4°F  Humidity: 45.2%  Pressure: 1002.3 hPa
@@ -29,12 +36,12 @@ A plant node can read up to six soil sensors (one per ADC1 pin), so one ESP32 ca
 
 ## Hardware
 
-| Part                                         | Purpose                            |
-| -------------------------------------------- | ---------------------------------- |
-| Raspberry Pi 5 (Raspberry Pi OS Lite 64-bit) | Server                             |
-| 2× ESP32                                     | Sensor nodes, send data over Wi-Fi |
-| GY-BME280 (6-pin, 3.3V only)                 | Temperature, humidity, pressure    |
-| Capacitive soil moisture sensor v1.2         | Soil moisture                      |
+|Part|Purpose|
+|---|---|
+|Raspberry Pi 5 (Raspberry Pi OS Lite 64-bit)|Server, database and dashboard|
+|2× ESP32|Sensor nodes, send data over Wi-Fi|
+|GY-BME280 (6-pin, 3.3V only)|Temperature, humidity, pressure|
+|Capacitive soil moisture sensor v1.2|Soil moisture|
 
 ## Wiring
 
@@ -65,13 +72,17 @@ GPIO34 is an ADC1 pin, which keeps working while Wi-Fi is on. ADC2 pins don't. F
 
 ### 1. Raspberry Pi server
 
+Set the database and Grafana passwords in `.env`, then start the stack:
+
 ```bash
-cd ~/projects/plantmonitor
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python server/server.py
+cp .env.example .env
+docker compose up -d --build
 ```
+
+|Service|Address|
+|---|---|
+|Server (the ESP32s send here)|`http://<pi-ip>:5000/data`|
+|Grafana dashboard|`http://<pi-ip>:3000`|
 
 Give the Pi a DHCP reservation on the router so its IP address doesn't change. The ESP32s need a fixed address to send to.
 
@@ -129,3 +140,18 @@ The soil sensor gives a raw reading from 0 to 4095. The server converts it to a 
 |Sensor in water|1470|100%|
 
 These values were measured with the sensor powered from 3.3V. To recalibrate, take a reading in dry air and one in water and update the two numbers. Each plant can have its own entry.
+
+## Dashboard (Grafana)
+
+Open `http://<pi-ip>:3000` and log in as `admin` with the Grafana password from `.env`. The **Plant Monitor** dashboard (shown at the top of this page) is under Dashboards. It shows the latest temperature, humidity, pressure and soil moisture, plus a graph of each over time.
+
+Grafana connects to the database and loads the dashboard automatically, using the files in `grafana/provisioning/` and `grafana/dashboards/plant-monitor.json`. To keep changes you make to the dashboard in Grafana, export it as JSON and save it over that file.
+
+The readings are stored in two tables:
+
+|Table|Columns|
+|---|---|
+|`env_readings`|`ts`, `device`, `temp_f`, `humidity`, `pressure`|
+|`soil_readings`|`ts`, `device`, `plant`, `soil_raw`, `soil_percent`|
+
+Times are stored in UTC. Grafana shows them in your browser's time zone.
