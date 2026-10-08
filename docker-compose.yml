@@ -1,0 +1,64 @@
+# Runs the whole plant monitor stack on the Raspberry Pi:
+#   server   - Flask app that receives readings from the ESP32s (port 5000)
+#   db       - PostgreSQL database that stores the readings
+#   grafana  - dashboards (port 3000)
+#
+# Start:   docker compose up -d --build
+# Logs:    docker compose logs -f server
+# Stop:    docker compose down
+#
+# Passwords come from the .env file (copy .env.example to .env).
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: plantmonitor
+      POSTGRES_USER: plant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plant -d plantmonitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_NAME: plantmonitor
+      DB_USER: plant
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ:-America/Chicago}
+    ports:
+      - "5000:5000"
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
+      # Used by grafana/provisioning/datasources/postgres.yml
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+
+# Named volumes keep the data when containers are recreated or updated.
+volumes:
+  db-data:
+  grafana-data:
