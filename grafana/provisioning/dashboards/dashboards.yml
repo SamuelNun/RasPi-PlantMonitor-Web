@@ -1,0 +1,13 @@
+# Loads every dashboard JSON file in /etc/grafana/dashboards
+# (the grafana/dashboards folder in this project).
+apiVersion: 1
+
+providers:
+  - name: Plant Monitor
+    folder: ""
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

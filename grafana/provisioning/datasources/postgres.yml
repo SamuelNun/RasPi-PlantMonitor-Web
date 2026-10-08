@@ -1,0 +1,20 @@
+# Tells Grafana where the plant monitor database is, so you don't
+# have to add the data source by hand.
+apiVersion: 1
+
+datasources:
+  - name: PlantDB
+    uid: plantdb
+    type: postgres
+    access: proxy
+    url: db:5432
+    user: plant
+    isDefault: true
+    editable: false
+    secureJsonData:
+      password: $POSTGRES_PASSWORD
+    jsonData:
+      database: plantmonitor
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: false
